@@ -1,3 +1,8 @@
+"use client";
+import { supabase } from "@/lib/supabase";
+
+import { useRef, useState } from "react";
+
 const budgetOptions = [
   "Under ₹25k / month",
   "₹25k – ₹50k / month",
@@ -5,7 +10,20 @@ const budgetOptions = [
   "₹1L+ / month",
 ];
 
+const countryCodes = [
+  { label: "India (+91)", value: "+91" },
+  { label: "USA (+1)", value: "+1" },
+  { label: "UK (+44)", value: "+44" },
+  { label: "UAE (+971)", value: "+971" },
+];
+
 export default function Contact() {
+
+  const formRef = useRef(null);
+const [status, setStatus] = useState("idle"); // idle | loading | success | error
+const [message, setMessage] = useState("");
+const [formKey, setFormKey] = useState(0);
+
   return (
     <section id="contact" className="relative py-20 overflow-hidden">
       {/* Consistent background */}
@@ -37,8 +55,62 @@ export default function Contact() {
             {/* glow */}
             <div className="pointer-events-none absolute -inset-1 rounded-3xl bg-gradient-to-r from-fuchsia-500/10 via-indigo-500/10 to-cyan-400/10 blur-2xl" />
 
-            <form className="relative space-y-5">
-              <div className="grid gap-4 md:grid-cols-2">
+            <form
+  key={formKey}
+  ref={formRef}
+  className="relative space-y-5"
+  onSubmit={async (e) => {
+    e.preventDefault();
+    if (status === "loading") return;
+
+    setStatus("loading");
+    setMessage("");
+
+    try {
+      const formData = new FormData(e.currentTarget);
+
+      const payload = {
+        name: String(formData.get("name") || "").trim(),
+        email: String(formData.get("email") || "").trim(),
+        company: String(formData.get("company") || "").trim(),
+        website: String(formData.get("website") || "").trim(),
+        country_code: String(formData.get("countryCode") || "").trim() || null,
+        phone: String(formData.get("phone") || "").trim() || null,
+        budget: String(formData.get("budget") || "").trim() || null,
+        message: String(formData.get("message") || "").trim() || null,
+      };
+
+      const { error } = await supabase.from("leads").insert([payload]);
+
+      if (error) {
+        setStatus("error");
+        setMessage(error.message || "Something went wrong. Please try again.");
+        return;
+      }
+
+      setStatus("success");
+      setMessage("Submitted successfully! I’ll reach out soon.");
+
+      setTimeout(() => {
+  setStatus("idle");
+  setMessage("");
+}, 2000);
+
+      // ✅ Reset the form reliably
+      formRef.current?.reset();
+      setFormKey((k) => k + 1); // forces select + any sticky fields to reset too
+    } catch (err) {
+      console.error(err);
+      setStatus("error");
+      setMessage("Unexpected error. Please try again.");
+    } finally {
+      // keep success visible; only stop loading
+      setStatus((s) => (s === "loading" ? "idle" : s));
+    }
+  }}
+>
+  
+  <div className="grid gap-4 md:grid-cols-2">
                 <Field label="Full name">
                   <input className={inputCls} placeholder="Your name" name="name" />
                 </Field>
@@ -63,15 +135,32 @@ export default function Contact() {
                 </Field>
               </div>
 
-              <Field label="Contact number">
-                <input
-                  className={inputCls}
-                  placeholder="10-digit number"
-                  name="phone"
-                  inputMode="numeric"
-                  autoComplete="tel"
-                />
-              </Field>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Country code">
+                  <div className="relative">
+                    <select className={`${inputCls} appearance-none pr-12`} name="countryCode" defaultValue="+91">
+                      {countryCodes.map((c) => (
+                        <option key={c.value} value={c.value}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-white/60">
+                      ▼
+                    </div>
+                  </div>
+                </Field>
+
+                <Field label="Contact number">
+                  <input
+                    className={inputCls}
+                    placeholder="10-digit number"
+                    name="phone"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                  />
+                </Field>
+              </div>
 
               <div className="relative">
                 <select
@@ -103,17 +192,39 @@ export default function Contact() {
                 />
               </Field>
 
-              <button
-                type="button"
-                className="w-full rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90"
-              >
-                Book a Call
-              </button>
+  <button
+    type="submit"
+    disabled={status === "loading"}
+    className={[
+      "w-full rounded-2xl px-5 py-3 text-sm font-semibold transition",
+      status === "loading"
+        ? "bg-white/60 text-black cursor-not-allowed"
+        : "bg-white text-black hover:opacity-90",
+    ].join(" ")}
+  >
+    {status === "loading" ? "Submitting..." : "Book a Call"}
+  </button>
 
-              <p className="text-center text-xs text-white/55">
-                By submitting, you agree to be contacted about your request.
-              </p>
-            </form>
+  {/* Success / Error UI */}
+  {message ? (
+    <div
+      className={[
+        "rounded-2xl border px-4 py-3 text-sm",
+        status === "error"
+          ? "border-red-400/30 bg-red-500/10 text-red-200"
+          : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200",
+      ].join(" ")}
+      role="status"
+      aria-live="polite"
+    >
+      {message}
+    </div>
+  ) : null}
+
+  <p className="text-center text-xs text-white/55">
+    By submitting, you agree to be contacted about your request.
+  </p>
+</form>
           </div>
         </div>
       </div>
